@@ -136,7 +136,7 @@ const forgotPassword = async (req, res) => {
     await sendResetPasswordEmail({
       name: user.name,
       email: user.email,
-      passwordToken: user.passwordToken,
+      passwordToken,
       origin: "http://localhost:3000",
     });
 
@@ -164,7 +164,6 @@ const resetPassword = async (req, res) => {
   const user = await User.findOne({ email });
   if (user) {
     const currentDate = new Date();
-    console.log("user password token", user.passwordToken, token);
     
     if (
       user.passwordToken === token &&
@@ -177,7 +176,7 @@ const resetPassword = async (req, res) => {
       await user.save();
     }
   }
-  res.status(StatusCodes.OK).json({ msg: "reset password" });
+  res.status(StatusCodes.OK).json({ msg: "password reset" });
 };
 module.exports = {
   register,
