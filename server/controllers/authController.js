@@ -1,8 +1,13 @@
 const User = require("../models/User");
 const { StatusCodes } = require("http-status-codes");
 const CustomError = require("../errors");
-const { attachCookiesToResponse, createTokenUser, sendVerificationEmail } = require("../utils");
+const {
+  attachCookiesToResponse,
+  createTokenUser,
+  sendVerificationEmail,
+} = require("../utils");
 const crypto = require("crypto");
+const Token = require("../models/Token");
 
 const register = async (req, res) => {
   const { email, name, password } = req.body;
@@ -25,8 +30,13 @@ const register = async (req, res) => {
     role,
     verificationToken,
   });
-  
-  await sendVerificationEmail({name: user.name, email: user.email, verificationToken: user.verificationToken, origin: 'http://localhost:3000'});
+
+  await sendVerificationEmail({
+    name: user.name,
+    email: user.email,
+    verificationToken: user.verificationToken,
+    origin: "http://localhost:3000",
+  });
   res.status(StatusCodes.CREATED).json({
     msg: "Success! Please check your email to verify account",
   });
@@ -52,7 +62,29 @@ const login = async (req, res) => {
     throw new CustomError.UnauthenticatedError("Please verify your email");
   }
   const tokenUser = createTokenUser(user);
-  attachCookiesToResponse({ res, user: tokenUser });
+
+  let refreshToken = "";
+  // To check if token already present for a user just use the same refreshToken
+  //instead of creating new token and an entry in DB
+  const existingToken = await Token.findOne({ user: user._id });
+  if (existingToken) {
+    const { isValid } = existingToken;
+    if (!isValid) {
+      throw new CustomError.UnauthenticatedError("Invalid Credentials");
+    }
+    refreshToken = existingToken.refreshToken;
+    attachCookiesToResponse({ res, user: tokenUser, refreshToken });
+    return res.status(StatusCodes.OK).json({ user: tokenUser });
+  }
+
+  refreshToken = crypto.randomBytes(40).toString("hex");
+  const userAgent = req.headers["user-agent"];
+  const ip = req.ip;
+
+  const userToken = { refreshToken, userAgent, ip, user: user._id };
+  await Token.create(userToken);
+
+  attachCookiesToResponse({ res, user: tokenUser, refreshToken });
 
   res.status(StatusCodes.OK).json({ user: tokenUser });
 };
